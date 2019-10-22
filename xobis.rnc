@@ -1,0 +1,959 @@
+# ##############################################################################
+# #                                XOBIS 3.0                                   #
+# ##############################################################################
+
+namespace local = ""
+namespace xobis = "http://xobis.info/ns/3.0/"
+namespace xs = "https://www.w3.org/2001/XMLSchema"
+
+
+# ******************************************************************************
+#                                    RECORD
+# ******************************************************************************
+# A Record is the top-level element for any XOBIS entity.
+# ******************************************************************************
+
+start |=
+	element xobis:record {
+		attribute lang { text }?,
+		controlData,
+		( conceptPE
+		| beingPE
+		| stringPE
+		| languagePE
+		| orgPE
+		| placePE
+		| eventPE
+		| objectPE
+		| workPE
+		| holdings ),
+		element xobis:relationships {
+			element xobis:relationship {
+				relationshipContent
+			}+
+		}?
+	}
+
+# ControlData includes all administrative (meta-) metadata:
+# Record control number(s) and their assigning Organization(s),
+# Record Type(s) (subsets), create/modify Time(s), etc.
+
+controlData |=
+	element xobis:controlData {
+		element xobis:id {
+			idContent,
+			element xobis:alternates {
+				element xobis:id { idContent }+
+			}?
+		},
+		element xobis:types { genericType+ }?,
+		element xobis:actions {
+			element xobis:action { genericType, (timeRef | durationRef) }+
+		}?
+	}
+
+idContent |=
+	attribute status {
+		(string "valid" | string "invalid" | string "cancelled" | string "incorrect")
+		(~ string " linking")?
+	}?,
+	( orgRef | workRef | element xobis:description { text } )+,
+	element xobis:value { text },
+	noteList?
+
+
+
+# ******************************************************************************
+#                                  BEING
+# ******************************************************************************
+# A Being is an individual or collective identity, that may be tangible or
+# intangible, living or dead, human, nonhuman or a personification.
+# ******************************************************************************
+
+beingPE |=
+	element xobis:being {
+		roleAttributes,
+		attribute type { string "human" | string "nonhuman" | string "special" }?,
+		attribute class {
+			string "individual"
+			| string "familial"
+			| string "collective"
+			| string "undifferentiated"
+			| string "referential"
+		}?,
+		element xobis:entry {
+			schemeAttribute?,
+			entryGroupAttributes?,
+			# Most PE Entries don't have a generic Type, but Being Entries may
+			# use real names, pseudonyms/pen names, or some other type of name
+			# that should be directly specifiable.
+			genericType?,
+			# Time or Duration to specify when the given Entry form is/was
+			# applicable, just as in Variant entries.
+			( timeRef | durationRef )?,
+			beingEntryContent
+		},
+		element xobis:variants { anyVariant+ }?,
+		noteList?
+	}
+
+beingVariant |=
+	element xobis:being {
+		variantAttributes?,
+		genericType?,
+		( timeRef | durationRef )?,
+		element xobis:entry {
+			substituteAttribute?,
+			schemeAttribute?,
+			entryGroupAttributes?,
+			beingEntryContent
+		},
+		noteList?
+	}
+
+beingRef |=
+	element xobis:being {
+		linkAttributes?, substituteAttribute?, beingEntryContent
+	}
+
+# Being Names have required qualification of Part type.
+beingEntryContent |=
+	element xobis:name {
+		( nameContent
+		| element xobis:part {
+			beingNamePartTypes1,
+			nameContent
+		}+
+		| element xobis:part {
+			beingNamePartTypes2,
+			nameContent
+		}+ )
+	},
+	qualifiers?
+
+beingNamePartTypes1 |=
+	attribute type {
+		string "given"
+		| string "surname"
+		| string "patronym"	# Finnbogadóttir
+		| string "matronym"	# Sinđelić
+		| string "teknonym"	# Abū Bakr
+		| string "expansion"
+	}
+
+beingNamePartTypes2 |=
+	attribute type {
+		string "given"
+		| string "paternal surname"
+		| string "maternal surname"
+		| string "patronym"
+		| string "matronym"
+		| string "teknonym"
+		| string "expansion"
+	}
+
+
+
+# ******************************************************************************
+#                                    CONCEPT
+# ******************************************************************************
+# A Concept is a topical and/or categorical construct not otherwise
+# representable by one of the other 9 PEs.
+# ******************************************************************************
+
+conceptPE |=
+	element xobis:concept {
+		attribute type {
+			string "abstract"
+			| string "collective"
+			| string "control"
+			| string "specific"
+		}?,
+		# Indicates if this heading is authorized for use as a subdivision
+		# on the target of a relationship (e.g., MeSH Qualifiers).
+		(
+			attribute usage { string "subdivision" },
+			attribute subtype {
+				 string "general"
+				 | string "form"
+				 | string "topical"
+				 | string "unspecified"
+			}
+		)?,
+		element xobis:entry {
+			schemeAttribute?,
+			entryGroupAttributes?,
+			conceptEntryContent
+		},
+		element xobis:variants { anyVariant+ }?,
+		noteList?
+	}
+
+conceptVariant |=
+	element xobis:concept {
+		variantAttributes?,
+		genericType?,
+		( timeRef | durationRef )?,
+		element xobis:entry {
+			substituteAttribute?,
+			schemeAttribute?,
+			entryGroupAttributes?,
+			conceptEntryContent
+		},
+		noteList?
+	}
+
+conceptEntryContent |= genericName, qualifiers?
+
+conceptRef |=
+	element xobis:concept {
+		linkAttributes?,
+		substituteAttribute?,
+		conceptEntryContent,
+		subdivisions?
+	}
+
+# Subdivisions (authorized by the usage attribute on their source Records) can
+# be used in Concept references to create hierarchical/compound references.
+subdivisions |=
+	element xobis:subdivisions {
+		( conceptRef | languageRef | placeRef | timeRef | durationRef )+
+	}
+
+
+# ******************************************************************************
+#                                    EVENT
+# ******************************************************************************
+# An Event is a named happening or occurrence, deliberate or spontaneous.
+# It excludes smaller-scale events and named processes, which are generally
+# categorical (i.e., Concepts) rather than referring to specific occurrences.
+# ******************************************************************************
+
+eventPE |=
+	element xobis:event {
+		attribute type {
+			string "natural"
+			| string "meeting"
+			| string "journey"
+			| string "occurrence"
+			| string "miscellaneous"
+		}?,
+		classAttribute?,
+		element xobis:entry {
+			schemeAttribute?,
+			entryGroupAttributes?,
+			eventEntryContent
+		},
+		element xobis:variants { anyVariant+ }?,
+		noteList?
+	}
+
+eventVariant |=
+	element xobis:event {
+		variantAttributes?,
+		genericType?,
+		( timeRef | durationRef )?,
+		element xobis:entry {
+			substituteAttribute?,
+			schemeAttribute?,
+			entryGroupAttributes?,
+			eventEntryContent
+		},
+		noteList?
+	}
+
+eventEntryContent |= prequalifiers?, genericName, qualifiers?
+
+eventRef |=
+	element xobis:event {
+		linkAttributes?, substituteAttribute?, eventEntryContent
+	}
+
+
+
+# ******************************************************************************
+#                                   LANGUAGE
+# ******************************************************************************
+# A Language is a spoken, written, or signed communication system.
+# ******************************************************************************
+
+languagePE |=
+	element xobis:language {
+		attribute type {
+			string "natural" | string "constructed" | string "script"
+		}?,
+		classAttribute?,
+		attribute usage { "subdivision" }?,
+		element xobis:entry { entryGroupAttributes?, langEntryContent },
+		element xobis:variants { anyVariant+ }?,
+		noteList?
+	}
+
+languageVariant |=
+	element xobis:language {
+		variantAttributes?,
+		genericType?,
+		( timeRef | durationRef )?,
+		element xobis:entry {
+			substituteAttribute?,
+			entryGroupAttributes?,
+			langEntryContent
+		},
+		noteList?
+	}
+
+langEntryContent |= element xobis:name { nameContent }, qualifiers?
+
+languageRef |=
+	element xobis:language {
+		linkAttributes?, substituteAttribute?, langEntryContent
+	}
+
+
+
+# ******************************************************************************
+#                                    OBJECT
+# ******************************************************************************
+# An Object is a tangible, three-dimensional, inanimate entity, such as a
+# crafted or manufactured artifact, or a specimen or sample of a
+# naturally-occurring, processed, or refined material or substance.
+# ******************************************************************************
+
+objectPE |=
+	element xobis:object {
+		(
+			# An Object with an "instance" role should not have class
+			# "referential".
+			( attribute role { string "instance" | string "authority instance" },
+			attribute class { string "individual" | string "collective" }? )
+			| ( attribute role { string "authority" },
+			classAttribute? )
+		),
+		attribute type {
+			string "natural" | string "crafted" | string "manufactured"
+		}?,
+		element xobis:entry {
+			entryGroupAttributes?,
+			objectEntryContent,
+		}
+		element xobis:variants { anyVariant+ }?,
+		noteList?
+	}
+
+objectVariant |=
+	element xobis:object {
+		variantAttributes?,
+		genericType?,
+		( timeRef | durationRef )?,
+		element xobis:entry {
+			substituteAttribute?,
+			schemeAttribute?,
+			entryGroupAttributes?,
+			objectEntryContent
+		},
+		noteList?
+	}
+
+objectEntryContent |= genericName, qualifiers?
+
+objectRef |=
+	element xobis:object {
+		linkAttributes?, substituteAttribute?, objectEntryContent
+	}
+
+
+
+# ******************************************************************************
+#                                 ORGANIZATION
+# ******************************************************************************
+# An Organization is a group of deliberately organized people, typically for
+# the sake of some economic, societal, and/or political goal. Distinct from
+# Being (for familial and ethnic groups), Event (for gatherings organized by
+# Organizational committees or secretariats), and Place (for higher-level
+# political jurisdictions).
+# ******************************************************************************
+
+orgPE |=
+	element xobis:organization {
+		attribute type {
+			( string "business"
+			| string "government"
+			| string "nonprofit"
+			| string "other" )
+		}?,
+		classAttribute?,
+		element xobis:entry {
+			schemeAttribute?,
+			entryGroupAttributes?,
+			orgEntryContent
+		},
+		element xobis:variants { anyVariant+ }?,
+		noteList?
+	}
+
+orgVariant |=
+	element xobis:organization {
+		variantAttributes?,
+		genericType?,
+		( timeRef | durationRef )?,
+		element xobis:entry {
+			substituteAttribute?,
+			schemeAttribute?,
+			entryGroupAttributes?,
+			orgEntryContent
+		},
+		noteList?
+	}
+
+orgEntryContent |= prequalifiers?, genericName, qualifiers?
+
+orgRef |=
+	element xobis:organization {
+		linkAttributes?, substituteAttribute?, orgEntryContent
+	}
+
+
+
+# ******************************************************************************
+#                                     PLACE
+# ******************************************************************************
+# A Place is a physical or political geographic entity. This includes
+# astronomical and terrestrial locations and their topographic and structural
+# features, and geopolitical jurisdictions of governments and their
+# subdivisions.
+# ******************************************************************************
+
+placePE |=
+	element xobis:place {
+		roleAttributes,
+		attribute type {
+			string "natural" | string "constructed" | string "jurisdictional"
+		}?,
+		classAttribute?,
+		attribute usage { string "subdivision" }?,
+		element xobis:entry {
+			schemeAttribute?,
+			entryGroupAttributes?,
+			placeEntryContent
+		},
+		element xobis:variants { anyVariant+ }?,
+		noteList?
+	}
+
+placeVariant |=
+	element xobis:place {
+		variantAttributes?,
+		genericType?,
+		( timeRef | durationRef )?,
+		element xobis:entry {
+			substituteAttribute?,
+			schemeAttribute?,
+			entryGroupAttributes?,
+			placeEntryContent
+		},
+		noteList?
+	}
+
+placeEntryContent |= genericName, qualifiers?
+
+placeRef |=
+	element xobis:place {
+		linkAttributes?, substituteAttribute?, placeEntryContent
+	}
+
+
+
+# ******************************************************************************
+#                                    STRING
+# ******************************************************************************
+# A String is a word or phrase, typically in some Language, treated at the level
+# of its existence as a textual sequence, rather than the abstract Concept(s) or
+# real-world entity it may represent.
+# ******************************************************************************
+
+
+stringPE |=
+	element xobis:string {
+		attribute type {
+			string "textual" | string "numeric" | string "mixed"
+		}?,
+		attribute class { string "word" | string "phrase" }?,
+		element xobis:entry { entryGroupAttributes?, stringEntryContent },
+		element xobis:variants { anyVariant+ }?,
+		noteList?
+	}
+
+stringVariant |=
+	element xobis:string {
+		variantAttributes?,
+		genericType?,
+		( timeRef | durationRef )?,
+		element xobis:entry {
+			substituteAttribute?, entryGroupAttributes?, stringEntryContent
+		},
+		noteList?
+	}
+
+stringEntryContent |= genericName, partOfSpeech*, qualifiers?
+
+# Optional, repeatable POS element, unique to Strings.
+partOfSpeech |=
+	element xobis:pos {
+		linkAttributes?,
+		genericContent
+	}
+
+stringRef |=
+	element xobis:string {
+		linkAttributes?, substituteAttribute?, stringEntryContent
+	}
+
+
+
+# ******************************************************************************
+#                                     TIME
+# ******************************************************************************
+# A Time is a numerical or named chronological designation. A Time PE may
+# consist of a single or dual Time instance, or a Duration, which is a range
+# with Time instances as its defining bounds.
+# ******************************************************************************
+
+timePE |= ( timeInstancePE | durationPE )
+
+# *********************
+#    TIME (INSTANCE)
+# *********************
+
+timeInstancePE |=
+	element xobis:time {
+		classAttribute?,
+		attribute usage { "subdivision" }?,
+		timeInstanceEntry,
+		element xobis:variants { anyVariant+ }?,
+		noteList?
+	}
+
+timeInstanceEntry |=
+	element xobis:entry {
+		schemeAttribute?,
+		entryGroupAttributes?,
+		calendar?,
+		timeContentSingle
+	}
+
+# The structure of Calendar looks the same as GenericType,
+# but is specific to Time/Duration.
+calendar |=
+	element xobis:calendar {
+		linkAttributes, attribute set { xs:anyURI }, empty
+	}
+
+# Time content has two possible structures: a numeric structure (YMD HMS ms)
+# or a free-string name.
+timeContentSingle |=
+	genericType?,
+	attribute certainty {
+		( string "exact"
+		| string "implied"	# [2018]
+		| string "estimated"	# 2018?
+		| string "approximate" )	# approximately/appx./ca. 2018
+	}?,
+	# One or more chronological qualifier(s) to the given time
+	# (before/after, early/mid/late)
+	attribute quality {
+		timeQuality (~ string " " ~ timeQuality)*
+	}?,
+	# Core numeric time structure reflects the elements of ISO 8601.
+	( year?, month?, day?, hour?, minute?, second?, millisecond?, tzHour?, tzMinute?
+	| genericName )
+
+year |= element xobis:year { xs:integer }
+month |= element xobis:month { xs:positiveInteger }
+day |= element xobis:day { xs:positiveInteger }
+hour |= element xobis:hour { xs:positiveInteger }
+minute |= element xobis:minute { xs:positiveInteger }
+second |= element xobis:second { xs:positiveInteger }
+millisecond |= element xobis:millisecond { xs:positiveInteger }
+
+tzHour |= element xobis:tzHour { xs:integer }
+tzMinute |= element xobis:tzMinute { xs:positiveInteger }
+
+timeQuality |=
+	( string "before"
+	| string "after"
+	| string "early"
+	| string "mid"
+	| string "late" )
+
+timeVariant |=
+	element xobis:time {
+		variantAttributes?, genericType?, timeInstanceEntry, noteList?
+	}
+
+timeRef |= element xobis:time { calendar?, timeContent }
+
+# This structure, allowing for Time instances defined by two "parts" of Time
+# content, is used only in Time refs, Duration Entries, and Duration refs.
+timeContent |=
+	( timeContentPart
+	| ( element xobis:part { timeContentPart },
+		element xobis:part { timeContentPart } ) )
+
+timeContentPart |=
+	linkAttributes?, substituteAttribute?, timeContentSingle
+
+
+# *********************
+#       DURATION
+# *********************
+
+durationPE |=
+	element xobis:duration {
+		classAttribute?,
+		attribute usage { "subdivision" }?,
+		durationEntry,
+		element xobis:variants { anyVariant+ }?,
+		noteList?
+	}
+
+durationEntry |=
+	element xobis:entry {
+		entryGroupAttributes?,
+		element xobis:time {
+			schemeAttribute?,
+			calendar?,
+			timeContent
+		},
+		element xobis:time {
+			schemeAttribute?,
+			calendar?,
+			timeContent
+		}
+	}
+
+durationVariant |=
+	element xobis:duration {
+		variantAttributes?, genericType?, durationEntry, noteList?
+	}
+
+durationRef |=
+	element xobis:duration {
+		element xobis:time { calendar?, timeContent },
+		element xobis:time { calendar?, timeContent }
+	}
+
+
+
+# ******************************************************************************
+#                                     WORK
+# ******************************************************************************
+# A Work is an instantiation of some artistic or intellectual Concept (e.g.
+# Paintings, Books, Databases). It excludes three-dimensional crafted or
+# manufactured objects (-> Object) and immobile e.g. architectural structures
+# (-> Place).
+# ******************************************************************************
+
+workPE |=
+	element xobis:work {
+		attribute type { string "intellectual" | string "artistic" }?,
+		roleAttributes,
+		workContent
+	}
+
+workContent |=
+	element xobis:entry {
+		attribute class {
+			( string "individual"
+			| string "serial"
+			| string "collective"
+			| string "referential" )
+		}?,
+		entryGroupAttributes?,
+		workEntryContent
+	},
+	element xobis:variants { anyVariant+ }?,
+	noteList?
+
+workVariant |=
+	element xobis:work {
+		variantAttributes?,
+		genericType?,
+		( timeRef | durationRef )?,
+		element xobis:entry {
+			substituteAttribute?,
+			schemeAttribute?,
+			entryGroupAttributes?,
+			workEntryContent
+		},
+		noteList?
+	}
+
+# Works require either a generic singular Name, or Parts with optional type
+# qualification.
+workEntryContent |= (
+	element xobis:name {
+		attribute type { string "generic" },
+		nameContent
+	},
+	qualifiers?
+	|
+	( element xobis:part {
+		attribute type {
+			string "subtitle" | string "section" | string "generic"
+		}?,
+		nameContent
+	},
+	qualifiers? )+
+)
+
+workRef |=
+	element xobis:work {
+		linkAttributes?, substituteAttribute?, workEntryContent
+	}
+
+
+
+# ******************************************************************************
+#                                 HOLDINGS
+# ******************************************************************************
+# A Holdings Record serves as an assertion of ownership or rights to the given
+# Work or Object, and to facilitate access to it by a user community.
+# ******************************************************************************
+
+holdings |=
+	element xobis:holdings {
+		element xobis:entry { holdingsEntryContent },
+		holdingsSummary?,
+		noteList?
+	}
+
+holdingsEntryContent |=
+	# Link to item claimed held.
+	(workRef | objectRef),
+	# Required qualification of type of Work or Object it is in this case
+	# (ebook, print book, art original, etc), i.e. a sort of GMD.
+	conceptRef,
+	# Any additional qualifying locations, concepts, etc.
+	qualifiers?
+
+holdingsSummary |=
+	element xobis:summary {
+		( element xobis:enumeration { text }
+		| element xobis:chronology { text }
+		| element xobis:enumeration { text }, element xobis:chronology { text } ),
+		noteList?
+	}
+
+holdingsRef |= element xobis:holdings { linkAttributes?, holdingsEntryContent }
+
+
+
+# ******************************************************************************
+#                                   QUALIFIERS
+# ******************************************************************************
+# Qualifiers are references to Principal Elements used to disambiguate other
+# Principal Elements.
+# ******************************************************************************
+
+# Prequalifiers precede the principal element's Entry; they are intended to
+# represent a higher level of jurisdiction or ownership within a hierarchical
+# entity, and as such are limited to the applicable PE types.
+prequalifiers |=
+	element xobis:prequalifiers {
+		( eventRef | orgRef | placeRef )+
+	}
+
+# Qualifiers follow the principal element's Entry, and may be any PE that serves
+# to disambiguate.
+qualifiers |=
+	element xobis:qualifiers {
+		( conceptRef
+		| eventRef
+		| stringRef
+		| languageRef
+		| (timeRef | durationRef)
+		| beingRef
+		| placeRef
+		| orgRef
+		| objectRef
+		| workRef )+
+	}
+
+
+
+# ******************************************************************************
+#                                 RELATIONSHIPS
+# ******************************************************************************
+# A Relationship links one Record to another in some Conceptual way.
+# ******************************************************************************
+
+relationshipContent |=
+	attribute xobis:type {
+		( string "subordinate"
+		| string "superordinate"
+		| string "preordinate"
+		| string "postordinate"
+		| string "associative"
+		| string "dissociative" )
+	}?,
+	(
+		(
+			attribute xobis:degree { string "primary" | string "secondary" }?,
+			element xobis:name { linkAttributes?, genericContent },
+			# Enumeration (determinative enumerative index[es])
+			# of the relationship.
+			stringRef?,
+			# Chronology (determinative datetime[s]) of the relationship.
+			( timeRef | durationRef )?,
+			element xobis:target {
+				( beingRef
+				| eventRef
+				| languageRef
+				| objectRef
+				| orgRef
+				| placeRef
+				| stringRef
+				| timeRef | durationRef
+				| workRef )
+			}
+		)
+		|
+		(
+			# If the target is a Concept, Relationship degree may also be
+			# tertiary (e.g., MeSH checktags) or broad (Broad MeSH).
+			attribute xobis:degree {
+				( string "primary"
+				| string "secondary"
+				| string "tertiary"
+				| string "broad" )
+			}?,
+			element xobis:name { linkAttributes?, genericContent },
+			stringRef?,  # enumeration
+			( timeRef | durationRef )?,
+			element xobis:target { conceptRef }
+		)
+	),
+	noteList?
+
+
+
+# ******************************************************************************
+#                                 COMMON
+# ******************************************************************************
+# Shared structural elements and attributes.
+# ******************************************************************************
+
+# Any PE may have a Variant that represents any other PE.
+anyVariant |=
+	( conceptVariant
+	| eventVariant
+	| orgVariant
+	| placeVariant
+	| stringVariant
+	| languageVariant
+	| timeVariant | durationVariant
+	| beingVariant
+	| objectVariant
+	| workVariant )
+
+# Variants may specify a direction of inclusion, or "sumption," indicating terms
+# that might have justification for independent establishment, but are being
+# explicitly treated as "see from" references by the cataloger.
+variantAttributes |=
+	attribute includes {
+		( string "broader"	# supersumption
+		| string "narrower"	# subsumption
+		| string "related" )	# circumsumption
+	}
+
+# Main and Variant Entries may be given a group ID within a Record, and a
+# particular entry within each group may then be specified as "preferred"
+# within the context of that group.
+entryGroupAttributes |=
+	attribute id { text }?,
+	attribute group { text }?,
+	attribute preferred { xs:boolean }?
+
+# A generic Name may be singular, or consist of delineated Parts.
+genericName |=
+	element xobis:name {
+		( nameContent
+		| element xobis:part { nameContent }+ )
+	}
+
+nameContent |=
+	attribute lang { text }?,
+	attribute script { text }?,
+	attribute nonfiling { xs:nonNegativeInteger }?,
+	text
+
+# The scheme attribute indicates some authoritative work from where an
+# authorized form is derived (LCSH, MeSH, etc.).
+schemeAttribute |= attribute scheme { text }
+
+# Generic content is freetext with an optional language attribute.
+genericContent |=
+	attribute lang { text }?,
+	text
+
+# The class attribute represents a broad category of Entry. The most common
+# valid set is defined here for reuse, but the precise set varies by PE type.
+classAttribute |=
+	attribute class {
+		string "individual" | string "collective" | string "referential"
+	}
+
+# The role attribute is used on "substantive" Principal Elements
+# (Place/Being/Object/Work) to indicate the role(s) served by the record:
+# as an authority (higher-level concept), instance (a/the more concrete item),
+# or both.
+roleAttributes |=
+	attribute role {
+		string "instance" | string "authority" | string "authority instance"
+	}
+
+# The generic Type element indicates membership in some controlled (i.e., linked
+# via URI) categorical group for various elements, allowing for extensibility in
+# which Records.
+# Not to be confused with the type attribute on most PE entries (except Beings
+# and Times), which relies on a limited group of such choices.
+genericType |=
+	element xobis:type {
+		linkAttributes,
+		attribute set { xs:anyURI },
+		empty
+	}
+
+linkAttributes |=
+	attribute href { xs:anyURI }?,
+	attribute title { text }
+
+# The substitute attribute is a boolean value indicating:
+# - whether the text of a particular variant may be used as a substitute for the
+#   text of the main entry in a reference, or
+# - whether a reference to an entry is using such a substitute value.
+substituteAttribute |= attribute substitute { xs:boolean }
+
+# A Note is a structured method of marking up transcription, public annotation,
+# local documentation, or descriptive free-text, with optional generic Type
+# and source evidence, that be used in various places in a Record.
+noteList |= ( note | element xobis:noteList { note+ } )
+
+note |=
+	element xobis:note {
+		attribute role {
+			( string "transcription"
+			| string "annotation"
+			| string "documentation"
+			| string "description" )
+		}?,
+		( linkAttributes, attribute set { xs:anyURI } )?,
+		genericType?,
+		genericContent,
+		noteSource*
+	}
+
+noteSource |=
+	element xobis:source {
+		( orgRef | workRef | element xobis:description { text } )+
+	}
