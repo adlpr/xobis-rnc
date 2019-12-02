@@ -1,6 +1,6 @@
 # xobis-rnc
 
-XOBIS schema in RelaxNG Compact syntax.
+XOBIS version 3.0 schema in RelaxNG Compact syntax.
 
 ## References
 
